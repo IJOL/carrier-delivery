@@ -64,8 +64,10 @@ class CarrierFile(models.Model):
                 with open(temp.name) as file_handle:
                     try:
                         ftp.storbinary(ftp_command, file_handle)
+                        return True
                     except Exception as e:
                         raise exceptions.Warning(_(
                             'Problem uploading file to FTP: {}').format(e))
+            return False
         else:
             return super(CarrierFile, self)._write_file(filename, file_content)
