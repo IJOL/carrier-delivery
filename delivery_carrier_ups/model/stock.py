@@ -23,7 +23,21 @@ from ClassicUPS import UPSConnection
 from ClassicUPS.ups import UPSError
 from openerp import models, fields, api, exceptions, _
 from .ups_config import UPS_LABEL_FORMAT
+import requests
+import base64
 
+
+def zpl2pdf(name,zpl):
+    url = 'http://api.labelary.com/v1/printers/8dpmm/labels/4x6/0/'
+    files = {'file' : zpl}
+    headers = {'Accept' : 'application/pdf'} # omit this line to get PNG images back
+    response = requests.post(url, headers = headers, files = files, stream = True)
+    if response.status_code == 200:
+        response.raw.decode_content = True
+        return {    'file': response.content,                    
+                    'file_type': 'pdf',
+                    'name': '{}.{}'.format(name,'pdf')
+                }
 
 class ShippingLabel(models.Model):
     _inherit = 'shipping.label'
@@ -98,7 +112,8 @@ class StockPicking(models.Model):
             'postal_code': self.partner_id.zip,
             'phone': self.partner_id.mobile or self.partner_id.phone or ''
         }
-
+        if self.partner_id.email:
+            to_addr.update(email=self.partner_id.email)
         number_of_packages = self.number_of_packages or 1
         weight = self.weight or 1
         packages = []
@@ -113,29 +128,49 @@ class StockPicking(models.Model):
                 'weight': weight / float(number_of_packages)
             })
 
-        try:
-            shipment = ups_client.create_shipment(
-                from_addr, to_addr, packages, self.ups_service_type,
-                file_format=ups_config.label_file_format,
-                dimensions_unit=ups_config.dimension_uom,
-                weight_unit=ups_config.weight_uom)
-        except UPSError, e:
-            raise exceptions.Warning(u"UPS Error: {}".format(e.message))
+        def get_pdf(t):
+            try:
+                label = ups_client.recovery_label(t)
+            except UPSError, e:
+                raise exceptions.Warning(u"UPS Error: {}".format(e.message))
+            return {
+                'file': label.get_label(),
+                'file_type': 'pdf',
+                'name': u"{}_{}.{}".format(t,1,'pdf')
+                }
 
         labels = []
 
-        label_no = 1
-        for label_content in shipment.get_label():
-            label = {
-                'file': label_content,
-                'file_type': ups_config.label_file_format,
-                'name': u"{}_{}.{}".format(shipment.tracking_number,
-                                           label_no,
-                                           ups_config.label_file_format)
-            }
-            labels.append(label)
-
-        self.write({'carrier_tracking_ref': shipment.tracking_number})
+        if not self.carrier_tracking_ref:
+            try:
+                shipment = ups_client.create_shipment(
+                    from_addr, to_addr, packages, self.ups_service_type,
+                    file_format=ups_config.label_file_format,
+                    dimensions_unit=ups_config.dimension_uom,
+                    weight_unit=ups_config.weight_uom, shipment_reference=self.origin or self.name)
+            except UPSError, e:
+                raise exceptions.Warning(u"UPS Error: {}".format(e.message))      
+    
+            label_no = 1
+            for label_content in shipment.get_label():
+                label = {
+                    'file': label_content,
+                    'file_type': ups_config.label_file_format,
+                    'name': u"{}_{}.{}".format(shipment.tracking_number,
+                                               label_no,
+                                               ups_config.label_file_format)
+                }
+                if ups_config.label_file_format=='ZPL' and ups_config.zpl2pdf:
+                   labels.append(zpl2pdf( u"{}_{}".format(shipment.tracking_number,
+                                               label_no
+                                               ),label_content))
+                else:
+                    labels.append(label)
+                label_no=label_no + 1
+     
+            self.write({'carrier_tracking_ref': shipment.tracking_number})
+        else:
+            labels.append(get_pdf(self.carrier_tracking_ref))
         return labels
 
     @api.multi

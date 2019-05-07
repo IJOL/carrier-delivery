@@ -64,3 +64,9 @@ class UPSConfig(models.Model):
 
     label_file_format = fields.Selection('_ups_label_file_format',
                                          required=True, default='EPL')
+    zpl2pdf = fields.Boolean('Convert zpl 2 pdf?')
+    
+    @api.onchange('zpl2pdf')    
+    def onchange_zpl2pdf(self):
+        if self.zpl2pdf:
+            self.label_file_format='ZPL'
