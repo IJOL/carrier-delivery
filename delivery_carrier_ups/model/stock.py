@@ -30,7 +30,7 @@ import base64
 def zpl2pdf(name,zpl):
     url = 'http://api.labelary.com/v1/printers/8dpmm/labels/4x6/0/'
     files = {'file' : zpl}
-    headers = {'Accept' : 'application/pdf'} # omit this line to get PNG images back
+    headers = {'Accept' : 'application/pdf','X-Rotation':'180'} # omit this line to get PNG images back
     response = requests.post(url, headers = headers, files = files, stream = True)
     if response.status_code == 200:
         response.raw.decode_content = True
@@ -120,11 +120,11 @@ class StockPicking(models.Model):
         for p in range(number_of_packages):
             packages.append({
                 'packaging_type': '02',
-                'dimensions': {
-                    'length': '30',
-                    'width': '30',
-                    'height': '30'
-                },
+#                 'dimensions': {
+#                     'length': '30',
+#                     'width': '30',
+#                     'height': '30'
+#                 },
                 'weight': weight / float(number_of_packages)
             })
 
@@ -145,7 +145,7 @@ class StockPicking(models.Model):
             try:
                 shipment = ups_client.create_shipment(
                     from_addr, to_addr, packages, self.ups_service_type,
-                    file_format=ups_config.label_file_format,
+                    file_format=ups_config.label_file_format,description=ups_config.description,
                     dimensions_unit=ups_config.dimension_uom,
                     weight_unit=ups_config.weight_uom, shipment_reference=self.origin or self.name)
             except UPSError, e:

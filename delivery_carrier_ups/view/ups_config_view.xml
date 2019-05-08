@@ -41,6 +41,7 @@
                                 <separator string="UoM Configuration" colspan="2"/>
                                 <field name="weight_uom"/>
                                 <field name="dimension_uom"/>
+                                <field name="description"/>
                             </group>
                             <group>
                                 <separator string="Label Configuration" colspan="2"/>
