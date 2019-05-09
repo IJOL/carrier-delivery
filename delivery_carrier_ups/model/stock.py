@@ -25,19 +25,24 @@ from openerp import models, fields, api, exceptions, _
 from .ups_config import UPS_LABEL_FORMAT
 import requests
 import base64
+from time import sleep
 
 
 def zpl2pdf(name,zpl):
     url = 'http://api.labelary.com/v1/printers/8dpmm/labels/4x6/0/'
     files = {'file' : zpl}
     headers = {'Accept' : 'application/pdf','X-Rotation':'180'} # omit this line to get PNG images back
-    response = requests.post(url, headers = headers, files = files, stream = True)
-    if response.status_code == 200:
-        response.raw.decode_content = True
-        return {    'file': response.content,                    
-                    'file_type': 'pdf',
-                    'name': '{}.{}'.format(name,'pdf')
-                }
+    c=0
+    while c<3:
+        response = requests.post(url, headers = headers, files = files, stream = True)
+        if response.status_code == 200:
+            response.raw.decode_content = True
+            return {    'file': response.content,                    
+                        'file_type': 'pdf',
+                        'name': '{}.{}'.format(name,'pdf')
+                    }
+        C=C+1
+        sleep(c)
 
 class ShippingLabel(models.Model):
     _inherit = 'shipping.label'
@@ -161,9 +166,13 @@ class StockPicking(models.Model):
                                                ups_config.label_file_format)
                 }
                 if ups_config.label_file_format=='ZPL' and ups_config.zpl2pdf:
-                   labels.append(zpl2pdf( u"{}_{}".format(shipment.tracking_number,
+                    label_pdf=zpl2pdf( u"{}_{}".format(shipment.tracking_number,
                                                label_no
-                                               ),label_content))
+                                               ),label_content)
+                    if label_pdf:
+                        labels.append(label_pdf)
+                    else:
+                        labels.append(label)                        
                 else:
                     labels.append(label)
                 label_no=label_no + 1
