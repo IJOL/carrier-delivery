@@ -133,16 +133,26 @@ class StockPicking(models.Model):
                 'weight': weight / float(number_of_packages)
             })
 
-        def get_pdf(t):
+        def get_label(t):
             try:
-                label = ups_client.recovery_label(t)
+                label = ups_client.recovery_label(t,file_format=ups_config.label_file_format)
             except UPSError, e:
                 raise exceptions.Warning(u"UPS Error: {}".format(e.message))
-            return {
+
+            data = {
                 'file': label.get_label(),
-                'file_type': 'pdf',
-                'name': u"{}_{}.{}".format(t,1,'pdf')
+                    'file_type': ups_config.label_file_format,
+                    'name': u"{}_{}.{}".format(t,
+                                               1,
+                                               ups_config.label_file_format)
                 }
+            if ups_config.label_file_format=='ZPL' and ups_config.zpl2pdf:
+                label_pdf=zpl2pdf( u"{}_{}".format(t,
+                                           1
+                                           ),label.get_label())
+                if label_pdf:
+                    return label_pdf
+            return data
 
         labels = []
 
@@ -179,7 +189,7 @@ class StockPicking(models.Model):
      
             self.write({'carrier_tracking_ref': shipment.tracking_number})
         else:
-            labels.append(get_pdf(self.carrier_tracking_ref))
+            labels.append(get_label(self.carrier_tracking_ref))
         return labels
 
     @api.multi
